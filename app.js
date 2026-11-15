@@ -1,7 +1,7 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/+esm";
 
 /* ===== Constantes ===== */
-const VERSAO = "4";
+const VERSAO = "5";
 const DOMINIO_LOGIN = "npm-solano.com"; // contas próprias do NPM (separadas do rpcontrol)
 const SETORES = ["Sul", "Norte", "Centro", "Leste"];
 const NIVEIS = [["iniciante", "Iniciante"], ["avancado", "Avançado"], ["setorizar", "Setorizar"]];
@@ -10,6 +10,8 @@ const NIVEL_NOME = Object.fromEntries(NIVEIS);
 /* ===== Utilidades ===== */
 const iso = d => { d = new Date(d); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 const today = () => iso(new Date());
+const diasDesde = s => { if (!s) return null; const p = x => { const [y, m, d] = String(x).slice(0, 10).split("-").map(Number); return Date.UTC(y, m - 1, d); }; return Math.max(0, Math.round((p(today()) - p(s)) / 864e5)); };
+const txtDias = n => n === null ? "sem data" : n === 0 ? "entrou hoje" : n === 1 ? "1 dia" : n + " dias";
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmtD = s => { if (!s) return ""; const [y, m, d] = String(s).slice(0, 10).split("-"); return d + "/" + m + "/" + y; };
 const fmtDH = s => { if (!s) return ""; const d = new Date(s); return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }) + " às " + d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }); };
@@ -111,11 +113,30 @@ function vEfetivos() {
   lista.sort((a, b) => ordem[a.nivel] - ordem[b.nivel] || a.qra.localeCompare(b.qra));
   let h = `<div class="card"><input id="busca" type="search" placeholder="Buscar por nome, DC ou recrutador" value="${esc(ui.q)}" enterkeyhint="search" autocapitalize="none" autocorrect="off">
   <div class="resumo cnt3"><button class="rs ${!ui.filtro ? "on" : ""}" data-filtro=""><b>${ativos.length}</b><span>Todos</span></button>${NIVEIS.map(([k, n]) => `<button class="rs ${ui.filtro === k ? "on" : ""}" data-filtro="${k}"><b>${cont(k)}</b><span>${n}</span></button>`).join("")}</div></div>`;
-  h += `<div class="card"><h2>${ui.filtro ? NIVEL_NOME[ui.filtro] : "Efetivos em treinamento"} (${lista.length})</h2>`;
+  if (ativos.length) h += `<button class="btn discord" data-relatorio><svg viewBox="0 0 24 24"><path d="M8 7h8M8 11h8M8 15h5"/><rect x="4" y="3" width="16" height="18" rx="3"/></svg>Relatório do dia para o Discord</button>`;
+  h += `<div class="card" style="margin-top:12px"><h2>${ui.filtro ? NIVEL_NOME[ui.filtro] : "Efetivos em treinamento"} (${lista.length})</h2>`;
   if (!ativos.length) h += `<div class="empty-msg">Nenhum efetivo cadastrado.<br>Toque no <b>+</b> lá em cima para cadastrar.</div>`;
   else if (!lista.length) h += `<div class="empty-msg">Nenhum efetivo encontrado.</div>`;
   lista.forEach(x => h += efCard(x, false));
   return h + `</div>`;
+}
+function textoRelatorio() {
+  const ativos = S.efetivos.filter(x => !x.setor_destino && (!ui.filtro || x.nivel === ui.filtro));
+  const linha = x => `• ${x.qra} - ${x.dc ? x.dc : "sem DC"} - ${txtDias(diasDesde(x.data_entrada))}`;
+  const porNome = (a, b) => a.qra.localeCompare(b.qra);
+  let s = `**📋 RELATÓRIO N.P.M. · ${fmtD(today())}**\n**Núcleo Preparatório Militar** · Exército de Solano\n`;
+  s += `${ui.filtro ? NIVEL_NOME[ui.filtro] : "Efetivos em treinamento"}: **${ativos.length}**\n`;
+  if (!ativos.length) s += "\nNenhum efetivo.\n";
+  else if (ui.filtro) { s += "\n"; ativos.sort(porNome).forEach(x => s += linha(x) + "\n"); }
+  else {
+    const ic = { setorizar: "🟡", avancado: "🟢", iniciante: "⚪" };
+    ["setorizar", "avancado", "iniciante"].forEach(k => {
+      const l = ativos.filter(x => x.nivel === k).sort(porNome); if (!l.length) return;
+      s += `\n${ic[k]} **${NIVEL_NOME[k]}** (${l.length})\n`; l.forEach(x => s += linha(x) + "\n");
+    });
+  }
+  s += `\n— ${EU.nome} · MAJ-GEN · N.P.M.`;
+  return s;
 }
 function vEnviados() {
   const env = S.efetivos.filter(x => x.setor_destino);
@@ -220,6 +241,18 @@ document.addEventListener("click", async e => {
   if (d.esalvar !== undefined) return salvarEfetivo();
   if (d.eapagar) { const x = S.efetivos.find(z => z.id === d.eapagar); return confirmBox(`Apagar <b>${esc(x.qra)}</b> do NPM?`, async () => { S.efetivos = S.efetivos.filter(z => z.id !== x.id); render(); if (await run(sb.from("npm_efetivos").delete().eq("id", x.id))) toast("Efetivo apagado"); }); }
   if (d.nivel) { const [id, k] = d.nivel.split("|"); return mudarNivel(id, k); }
+  if (d.relatorio !== undefined) {
+    openModal(`<div class="mhead"><h2>Relatório do dia</h2>${X_BTN}</div>
+    <div class="sub" style="margin-bottom:8px">${ui.filtro ? "Só " + NIVEL_NOME[ui.filtro] + " (filtro atual)." : "Todos os efetivos em treinamento."} Copie e cole no Discord.</div>
+    <textarea id="relTxt" readonly class="resumo-txt">${esc(textoRelatorio())}</textarea><button class="btn" data-copiarrel>Copiar relatório</button>`);
+    return;
+  }
+  if (d.copiarrel !== undefined) {
+    const el = document.getElementById("relTxt");
+    try { await navigator.clipboard.writeText(el.value); toast("✓ Relatório copiado — é só colar no Discord"); closeModal(); }
+    catch (er) { el.focus(); el.select(); try { document.execCommand("copy"); toast("✓ Relatório copiado"); closeModal(); } catch (e2) { toast("Selecione o texto e copie"); } }
+    return;
+  }
   if (d.filtro !== undefined) { ui.filtro = ui.filtro === d.filtro ? "" : d.filtro; return render(); }
   if (d.envsetor) { ui.envSetor = ui.envSetor === d.envsetor ? "" : d.envsetor; return render(); }
   if (d.semfoto !== undefined) { EU.avatar = ""; render(); if (await run(sb.rpc("npm_salvar_avatar", { p_avatar: "" }))) toast("✓ Usando a logo do NPM"); return; }
