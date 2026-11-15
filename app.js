@@ -1,7 +1,7 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/+esm";
 
 /* ===== Constantes ===== */
-const VERSAO = "1";
+const VERSAO = "2";
 const DOMINIO_LOGIN = "npm-solano.com"; // contas próprias do NPM (separadas do rpcontrol)
 const SETORES = ["Sul", "Norte", "Centro", "Leste"];
 const NIVEIS = [["iniciante", "Iniciante"], ["avancado", "Avançado"], ["setorizar", "Setorizar"]];
@@ -67,8 +67,8 @@ const isAdmin = () => EU.papel === "admin";
 /* ===== Telas ===== */
 const avatarUrl = () => EU.avatar || "logo.jpg";
 function header() {
-  return `<header><div class="top"><div class="avatar" style="background-image:url('${avatarUrl()}')"></div>
-  <div style="min-width:0"><h1>${esc(EU.nome)}</h1><div class="rank-t">MAJ-GEN</div><div class="unit">Exército de Solano</div><div id="status"></div></div>
+  return `<header><div class="top"><button class="hperfil" data-tab="perfil" aria-label="Abrir perfil"><div class="avatar" style="background-image:url('${avatarUrl()}')"></div>
+  <div style="min-width:0"><h1>${esc(EU.nome)}</h1><div class="rank-t">MAJ-GEN</div><div class="unit">Exército de Solano</div><div id="status"></div></div></button>
   <button class="hbtn" data-novo aria-label="Cadastrar efetivo"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div></header>
   <nav id="nav">${TABS.map(([k, n]) => `<button class="${k === tab ? "on" : ""}" data-tab="${k}"><svg viewBox="0 0 24 24">${ICON[k]}</svg>${n}</button>`).join("")}</nav>`;
 }
