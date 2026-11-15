@@ -1,7 +1,7 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/+esm";
 
 /* ===== Constantes ===== */
-const VERSAO = "3";
+const VERSAO = "4";
 const DOMINIO_LOGIN = "npm-solano.com"; // contas próprias do NPM (separadas do rpcontrol)
 const SETORES = ["Sul", "Norte", "Centro", "Leste"];
 const NIVEIS = [["iniciante", "Iniciante"], ["avancado", "Avançado"], ["setorizar", "Setorizar"]];
@@ -52,16 +52,17 @@ async function run(promise) {
 }
 
 /* ===== Estado de tela ===== */
-const TABS = [["efetivos", "Efetivos"], ["enviados", "Enviados"], ["perfil", "Perfil"]];
+const TABS = [["efetivos", "Efetivos"], ["enviados", "Enviados"], ["avaliacao", "Avaliação"]];
 const ICON = {
   efetivos: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>',
   enviados: '<path d="M4 12h12M12 6l6 6-6 6"/><path d="M20 4v16"/>',
-  perfil: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>'
+  avaliacao: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 3v3h6V3M9 11l1.5 1.5L13 10M9 16h6"/>'
 };
-let tab = (location.hash || "").slice(1); if (!TABS.some(t => t[0] === tab)) tab = "efetivos";
+const TAB_OK = t => t === "perfil" || TABS.some(x => x[0] === t);
+let tab = (location.hash || "").slice(1); if (!TAB_OK(tab)) tab = "efetivos";
 const ui = { temResp: null, fase: "carregando", modo: "entrar", erroLogin: "", filtro: "", q: "", envSetor: "", cad: null };
 function go(t) { if (t === tab) { window.scrollTo({ top: 0, behavior: "smooth" }); return; } tab = t; try { history.replaceState(null, "", "#" + t); } catch (e) { } render(); window.scrollTo(0, 0); }
-window.addEventListener("hashchange", () => { const t = location.hash.slice(1); if (TABS.some(x => x[0] === t)) { tab = t; render(); } });
+window.addEventListener("hashchange", () => { const t = location.hash.slice(1); if (TAB_OK(t)) { tab = t; render(); } });
 const isAdmin = () => EU.papel === "admin";
 
 /* ===== Telas ===== */
@@ -126,6 +127,9 @@ function vEnviados() {
   lista.forEach(x => h += efCard(x, true));
   return h + `</div>`;
 }
+function vAvaliacao() {
+  return `<div class="card"><h2>Avaliação</h2><div class="empty-msg">Em breve.<br><span class="sub">As perguntas da avaliação dos efetivos vão aparecer aqui.</span></div></div>`;
+}
 function vPerfil() {
   return `<div class="card perfil"><div class="avatar grande" style="background-image:url('${avatarUrl()}')"></div>
   <h2 style="text-align:center;margin:12px 0 2px">${esc(EU.nome)}</h2><div class="rank-t" style="text-align:center">MAJ-GEN</div><div class="unit" style="text-align:center">Exército de Solano · N.P.M.</div>
@@ -155,7 +159,7 @@ function render() {
   if (ui.fase !== "pronto") { root.innerHTML = `<div class="loading">Carregando…</div>`; return; }
   const st = document.getElementById("status"); const stTxt = st ? st.textContent : "✓ Conectado", stCor = st ? st.style.color : "#5fbf7a";
   const y = window.scrollY;
-  root.innerHTML = header() + `<main id="app">${{ efetivos: vEfetivos, enviados: vEnviados, perfil: vPerfil }[tab]()}</main>`;
+  root.innerHTML = header() + `<main id="app">${{ efetivos: vEfetivos, enviados: vEnviados, avaliacao: vAvaliacao, perfil: vPerfil }[tab]()}</main>`;
   if (render.mesmaAba === tab) window.scrollTo(0, y); render.mesmaAba = tab;
   setStatus(stTxt, stCor);
 }
