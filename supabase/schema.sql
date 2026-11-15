@@ -5,8 +5,9 @@
 --  Como usar: Supabase → SQL Editor → New query → cole TODO este arquivo → Run.
 --  Pode rodar de novo quando o arquivo for atualizado: os dados não se perdem.
 --
---  • Contas próprias do NPM (separadas do rpcontrol). A PRIMEIRA conta criada
---    no painel do NPM vira administradora e aprova as próximas.
+--  • Uma conta só: a do responsável pelo NPM (separada do rpcontrol).
+--    A primeira conta criada no painel vira a responsável; depois disso
+--    ninguém mais consegue criar conta no NPM.
 --  • Efetivos ficam em npm_efetivos, a mesma tabela que o painel do TEN-GEN lê.
 --    Quem é marcado como "setorizar" aparece para o TEN-GEN, que escolhe o setor.
 --  • O NPM não consegue mudar o setor de destino: só o TEN-GEN.
@@ -54,6 +55,7 @@ create table if not exists public.npm_usuarios (
   aprovado  boolean not null default false,
   criado_em timestamptz not null default now()
 );
+alter table public.npm_usuarios add column if not exists avatar text not null default '';
 
 create or replace function public.npm_ok() returns boolean
 language sql stable security definer set search_path = public as $$
@@ -65,8 +67,8 @@ language sql stable security definer set search_path = public as $$
 $$;
 
 -- Chamada logo após criar a conta no painel do NPM.
--- Só contas do NPM (e-mail interno @npm-solano.com) podem se registrar aqui.
--- Se ainda não existe administrador, a conta vira administradora já aprovada.
+-- Só contas do NPM (e-mail interno @npm-solano.com). Só a PRIMEIRA conta é aceita:
+-- ela vira a responsável. Depois disso, novas contas são recusadas.
 create or replace function public.npm_registrar(p_nome text) returns text
 language plpgsql security definer set search_path = public as $$
 declare em text; n text := trim(coalesce(p_nome, ''));
@@ -79,12 +81,26 @@ begin
     return (select case when aprovado then papel else 'pendente' end from npm_usuarios where user_id = auth.uid());
   end if;
   lock table npm_usuarios in exclusive mode;
-  if not exists (select 1 from npm_usuarios where papel = 'admin' and aprovado) then
-    insert into npm_usuarios (user_id, nome, papel, aprovado) values (auth.uid(), n, 'admin', true);
-    return 'admin';
-  end if;
-  insert into npm_usuarios (user_id, nome) values (auth.uid(), n);
-  return 'pendente';
+  if exists (select 1 from npm_usuarios) then raise exception 'O NPM já tem um responsável cadastrado.'; end if;
+  insert into npm_usuarios (user_id, nome, papel, aprovado) values (auth.uid(), n, 'admin', true);
+  return 'admin';
+end $$;
+
+-- Usado na tela de login (antes de entrar) para esconder "Criar conta" quando já existe responsável
+create or replace function public.npm_tem_responsavel() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.npm_usuarios);
+$$;
+
+-- Foto do perfil do responsável (imagem pequena, já reduzida pelo painel)
+create or replace function public.npm_salvar_avatar(p_avatar text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not npm_ok() then raise exception 'Sem acesso.'; end if;
+  if p_avatar is null then p_avatar := ''; end if;
+  if length(p_avatar) > 400000 then raise exception 'Imagem grande demais.'; end if;
+  if p_avatar <> '' and p_avatar not like 'data:image/%' then raise exception 'Imagem inválida.'; end if;
+  update npm_usuarios set avatar = p_avatar where user_id = auth.uid();
 end $$;
 
 -- Situação de quem está logado: 'admin', 'membro', 'pendente' ou 'nenhum'
@@ -93,7 +109,7 @@ language sql stable security definer set search_path = public as $$
   select coalesce((select case when aprovado then papel else 'pendente' end from npm_usuarios where user_id = auth.uid()), 'nenhum');
 $$;
 
--- Administração da equipe (só administradores)
+-- Administração de contas (reservado; o painel usa uma conta só)
 create or replace function public.npm_aprovar(p_user uuid) returns void
 language plpgsql security definer set search_path = public as $$
 begin
@@ -124,9 +140,11 @@ begin
 end $$;
 
 revoke all on function public.npm_registrar(text), public.npm_situacao(), public.npm_aprovar(uuid),
-  public.npm_definir_papel(uuid, text), public.npm_remover(uuid) from public, anon;
+  public.npm_definir_papel(uuid, text), public.npm_remover(uuid), public.npm_salvar_avatar(text) from public, anon;
 grant execute on function public.npm_registrar(text), public.npm_situacao(), public.npm_aprovar(uuid),
-  public.npm_definir_papel(uuid, text), public.npm_remover(uuid), public.npm_ok(), public.npm_admin() to authenticated;
+  public.npm_definir_papel(uuid, text), public.npm_remover(uuid), public.npm_ok(), public.npm_admin(),
+  public.npm_salvar_avatar(text) to authenticated;
+grant execute on function public.npm_tem_responsavel() to anon, authenticated;
 
 -- ---------------------------------------------------------------------
 -- Proteções automáticas em npm_efetivos

@@ -26,7 +26,7 @@ const url = (String(CFG.SUPABASE_URL || "").trim().match(/^https?:\/\/[^\/\s]+/)
 const sb = url && CFG.SUPABASE_ANON_KEY ? createClient(url, String(CFG.SUPABASE_ANON_KEY).trim()) : null;
 
 let S = { efetivos: [], usuarios: [] };
-let EU = { id: null, nome: "", papel: "" };
+let EU = { id: null, nome: "", papel: "", avatar: "" };
 async function carregar() {
   const [ef, us] = await Promise.all([
     sb.from("npm_efetivos").select("*").order("qra").range(0, 4999),
@@ -34,7 +34,7 @@ async function carregar() {
   ]);
   if (ef.error) throw ef.error; if (us.error) throw us.error;
   S = { efetivos: ef.data, usuarios: us.data };
-  const me = S.usuarios.find(u => u.user_id === EU.id); if (me) { EU.nome = me.nome; EU.papel = me.papel; }
+  const me = S.usuarios.find(u => u.user_id === EU.id); if (me) { EU.nome = me.nome; EU.papel = me.papel; EU.avatar = me.avatar || ""; }
 }
 
 /* ===== Status / toast ===== */
@@ -52,35 +52,36 @@ async function run(promise) {
 }
 
 /* ===== Estado de tela ===== */
-const TABS = [["efetivos", "Efetivos"], ["enviados", "Enviados"], ["equipe", "Equipe"]];
+const TABS = [["efetivos", "Efetivos"], ["enviados", "Enviados"], ["perfil", "Perfil"]];
 const ICON = {
   efetivos: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>',
   enviados: '<path d="M4 12h12M12 6l6 6-6 6"/><path d="M20 4v16"/>',
-  equipe: '<path d="M12 3 4 6v6c0 5 3.4 8.3 8 9 4.6-.7 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/>'
+  perfil: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>'
 };
 let tab = (location.hash || "").slice(1); if (!TABS.some(t => t[0] === tab)) tab = "efetivos";
-const ui = { fase: "carregando", modo: "entrar", erroLogin: "", filtro: "", q: "", envSetor: "", cad: null };
+const ui = { temResp: null, fase: "carregando", modo: "entrar", erroLogin: "", filtro: "", q: "", envSetor: "", cad: null };
 function go(t) { if (t === tab) { window.scrollTo({ top: 0, behavior: "smooth" }); return; } tab = t; try { history.replaceState(null, "", "#" + t); } catch (e) { } render(); window.scrollTo(0, 0); }
 window.addEventListener("hashchange", () => { const t = location.hash.slice(1); if (TABS.some(x => x[0] === t)) { tab = t; render(); } });
 const isAdmin = () => EU.papel === "admin";
 
 /* ===== Telas ===== */
+const avatarUrl = () => EU.avatar || "logo.jpg";
 function header() {
-  const pend = isAdmin() ? S.usuarios.filter(u => !u.aprovado).length : 0;
-  return `<header><div class="top"><div class="avatar"></div>
-  <div style="min-width:0"><h1>N.P.M.</h1><div class="rank-t">NÚCLEO PREPARATÓRIO MILITAR</div><div class="unit">Exército de Solano · ${esc(EU.nome)}</div><div id="status"></div></div>
+  return `<header><div class="top"><div class="avatar" style="background-image:url('${avatarUrl()}')"></div>
+  <div style="min-width:0"><h1>${esc(EU.nome)}</h1><div class="rank-t">MAJ-GEN</div><div class="unit">Exército de Solano</div><div id="status"></div></div>
   <button class="hbtn" data-novo aria-label="Cadastrar efetivo"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button></div></header>
-  <nav id="nav">${TABS.map(([k, n]) => `<button class="${k === tab ? "on" : ""}" data-tab="${k}"><svg viewBox="0 0 24 24">${ICON[k]}</svg>${n}${k === "equipe" && pend ? `<span class="nb">${pend}</span>` : ""}</button>`).join("")}</nav>`;
+  <nav id="nav">${TABS.map(([k, n]) => `<button class="${k === tab ? "on" : ""}" data-tab="${k}"><svg viewBox="0 0 24 24">${ICON[k]}</svg>${n}</button>`).join("")}</nav>`;
 }
 function vLogin() {
-  const criar = ui.modo === "criar";
-  return `<div class="login"><div class="avatar"></div><h1>N.P.M.</h1><div class="rank-t">NÚCLEO PREPARATÓRIO MILITAR</div><div class="unit">Exército de Solano</div>
-  <div class="seg" style="margin-top:20px"><button class="${!criar ? "on" : ""}" data-modo="entrar">Entrar</button><button class="${criar ? "on" : ""}" data-modo="criar">Criar conta</button></div>
-  <form class="card" id="loginForm"><label>Nome no jogo</label><input id="lNome" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" required>
+  const podeCriar = ui.temResp === false;
+  const criar = podeCriar && ui.modo === "criar";
+  return `<div class="login"><img class="logo-login" src="logo.jpg" alt="NPM · Núcleo Preparatório Militar">
+  ${podeCriar ? `<div class="seg" style="margin-top:16px"><button class="${!criar ? "on" : ""}" data-modo="entrar">Entrar</button><button class="${criar ? "on" : ""}" data-modo="criar">Criar conta</button></div>` : ""}
+  <form class="card" id="loginForm" style="margin-top:${podeCriar ? 0 : 16}px"><label>QRA (nome no jogo)</label><input id="lNome" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" enterkeyhint="next" required>
   <label>Senha</label><input id="lSenha" type="password" autocomplete="${criar ? "new-password" : "current-password"}" enterkeyhint="${criar ? "next" : "go"}" required>
   ${criar ? `<label>Repita a senha</label><input id="lSenha2" type="password" autocomplete="new-password" enterkeyhint="go" required>` : ""}
-  <button class="btn" type="submit">${criar ? "Criar conta" : "Entrar"}</button><div class="err" id="lErr">${esc(ui.erroLogin)}</div>
-  <div class="sub">${criar ? "Depois de criar, um administrador do NPM precisa aprovar sua conta." : "Conta própria do NPM (não é a do rpcontrol)."}</div></form></div>`;
+  <button class="btn" type="submit">${criar ? "Criar conta do responsável" : "Entrar"}</button><div class="err" id="lErr">${esc(ui.erroLogin)}</div>
+  <div class="sub">${criar ? "Esta será a única conta do NPM. O QRA aparece no cabeçalho do painel." : "Acesso do responsável pelo NPM."}</div></form></div>`;
 }
 function vPendente() {
   return `<div class="login"><div class="avatar"></div><div class="card" style="margin-top:20px"><h2>Aguardando aprovação</h2><p>Sua conta <b>${esc(EU.nome)}</b> foi criada. Peça para um administrador do NPM aprovar na aba <b>Equipe</b>.</p><button class="btn" data-verificar>Já fui aprovado</button><button class="btn sec" data-sair>Sair</button></div></div>`;
@@ -125,24 +126,25 @@ function vEnviados() {
   lista.forEach(x => h += efCard(x, true));
   return h + `</div>`;
 }
-function vEquipe() {
-  const pend = S.usuarios.filter(u => !u.aprovado), ok = S.usuarios.filter(u => u.aprovado);
-  let h = "";
-  if (isAdmin()) {
-    h += `<div class="card"><h2>Aguardando aprovação (${pend.length})</h2>`;
-    if (!pend.length) h += `<div class="empty-msg">Nenhuma conta esperando.</div>`;
-    pend.forEach(u => { h += `<div class="hist"><div class="who"><b>${esc(u.nome)}</b><span>Criou a conta em ${fmtD(u.criado_em)}</span></div><button class="btn sm" data-aprovar="${u.user_id}">Aprovar</button><button class="x" data-remover="${u.user_id}" aria-label="Recusar">×</button></div>`; });
-    h += `</div>`;
-  }
-  h += `<div class="card"><h2>Equipe do NPM (${ok.length})</h2>`;
-  ok.forEach(u => {
-    const eu = u.user_id === EU.id;
-    h += `<div class="hist"><div class="who"><b>${esc(u.nome)}${eu ? ' <span class="sub">(você)</span>' : ""}</b><span>${u.papel === "admin" ? "Administrador" : "Membro"}</span></div>`;
-    if (isAdmin() && !eu) h += `<button class="btn sm sec" data-papel="${u.user_id}|${u.papel === "admin" ? "membro" : "admin"}">${u.papel === "admin" ? "Tirar admin" : "Tornar admin"}</button><button class="x" data-remover="${u.user_id}" aria-label="Remover">×</button>`;
-    h += `</div>`;
-  });
-  h += `</div><div class="card"><div class="sub" style="text-align:center">Versão do painel: ${VERSAO}</div><button class="btn sec" data-sair>Sair da conta</button></div>`;
-  return h;
+function vPerfil() {
+  return `<div class="card perfil"><div class="avatar grande" style="background-image:url('${avatarUrl()}')"></div>
+  <h2 style="text-align:center;margin:12px 0 2px">${esc(EU.nome)}</h2><div class="rank-t" style="text-align:center">MAJ-GEN</div><div class="unit" style="text-align:center">Exército de Solano · N.P.M.</div>
+  <label class="btn" style="display:block;text-align:center;line-height:50px;padding:0;margin-top:16px;color:#16130b">Trocar foto<input type="file" id="fotoInput" accept="image/*" hidden></label>
+  ${EU.avatar ? `<button class="btn sec" data-semfoto>Usar a logo do NPM</button>` : ""}
+  <div class="sub" style="text-align:center;margin-top:8px">A foto aparece no cabeçalho do painel.</div></div>
+  <div class="card"><div class="sub" style="text-align:center">Versão do painel: ${VERSAO}</div><button class="btn sec" data-sair>Sair da conta</button></div>`;
+}
+async function trocarFoto(file) {
+  if (!file || !/^image\//.test(file.type)) return toast("Escolha uma imagem");
+  setStatus("Enviando foto…");
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); }).catch(() => null);
+  if (!img) return toast("Não consegui abrir essa imagem");
+  const lado = Math.min(img.naturalWidth, img.naturalHeight), alvo = 320;
+  const c = document.createElement("canvas"); c.width = c.height = alvo;
+  c.getContext("2d").drawImage(img, (img.naturalWidth - lado) / 2, (img.naturalHeight - lado) / 2, lado, lado, 0, 0, alvo, alvo);
+  const dataUrl = c.toDataURL("image/jpeg", 0.85); URL.revokeObjectURL(img.src);
+  EU.avatar = dataUrl; render();
+  if (await run(sb.rpc("npm_salvar_avatar", { p_avatar: dataUrl }))) toast("✓ Foto atualizada");
 }
 
 /* ===== Render ===== */
@@ -153,7 +155,7 @@ function render() {
   if (ui.fase !== "pronto") { root.innerHTML = `<div class="loading">Carregando…</div>`; return; }
   const st = document.getElementById("status"); const stTxt = st ? st.textContent : "✓ Conectado", stCor = st ? st.style.color : "#5fbf7a";
   const y = window.scrollY;
-  root.innerHTML = header() + `<main id="app">${{ efetivos: vEfetivos, enviados: vEnviados, equipe: vEquipe }[tab]()}</main>`;
+  root.innerHTML = header() + `<main id="app">${{ efetivos: vEfetivos, enviados: vEnviados, perfil: vPerfil }[tab]()}</main>`;
   if (render.mesmaAba === tab) window.scrollTo(0, y); render.mesmaAba = tab;
   setStatus(stTxt, stCor);
 }
@@ -216,12 +218,14 @@ document.addEventListener("click", async e => {
   if (d.nivel) { const [id, k] = d.nivel.split("|"); return mudarNivel(id, k); }
   if (d.filtro !== undefined) { ui.filtro = ui.filtro === d.filtro ? "" : d.filtro; return render(); }
   if (d.envsetor) { ui.envSetor = ui.envSetor === d.envsetor ? "" : d.envsetor; return render(); }
+  if (d.semfoto !== undefined) { EU.avatar = ""; render(); if (await run(sb.rpc("npm_salvar_avatar", { p_avatar: "" }))) toast("✓ Usando a logo do NPM"); return; }
   if (d.aprovar) { const u = S.usuarios.find(z => z.user_id === d.aprovar); u.aprovado = true; render(); if (await run(sb.rpc("npm_aprovar", { p_user: u.user_id }))) toast(`✓ ${u.nome} aprovado`); return; }
   if (d.papel) { const [id, p] = d.papel.split("|"); const u = S.usuarios.find(z => z.user_id === id); u.papel = p; render(); if (await run(sb.rpc("npm_definir_papel", { p_user: id, p_papel: p }))) toast(`✓ ${u.nome}: ${p === "admin" ? "administrador" : "membro"}`); return; }
   if (d.remover) { const u = S.usuarios.find(z => z.user_id === d.remover); return confirmBox(`${u.aprovado ? "Remover" : "Recusar"} <b>${esc(u.nome)}</b> do NPM?`, async () => { S.usuarios = S.usuarios.filter(z => z.user_id !== u.user_id); render(); await run(sb.rpc("npm_remover", { p_user: u.user_id })); }); }
   if (d.mclose !== undefined) return closeModal();
   if (d.mok !== undefined) { closeModal(); const f = confirmOk; confirmOk = null; if (f) f(); return; }
 });
+document.addEventListener("change", e => { if (e.target.id === "fotoInput") trocarFoto(e.target.files[0]); });
 document.addEventListener("input", e => {
   if (e.target.id === "busca") { ui.q = e.target.value; clearTimeout(ui._bt); ui._bt = setTimeout(() => { const pos = e.target.selectionStart; render(); const el = document.getElementById("busca"); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch (er) { } } }, 250); }
 });
@@ -240,7 +244,7 @@ document.addEventListener("submit", async e => {
     if (error) return falha(/already|registered|exists/i.test(error.message) ? "Já existe uma conta com esse nome. Use Entrar." : error.message);
     if (!data.session) return falha("O Supabase está exigindo confirmação de e-mail. Desligue \"Confirm email\" nas configurações de Auth.");
     const r = await sb.rpc("npm_registrar", { p_nome: nome });
-    if (r.error) return falha(r.error.message);
+    if (r.error) { await sb.auth.signOut(); return falha(r.error.message); }
   } else {
     const { error } = await sb.auth.signInWithPassword({ email: emailDe(nome), password: senha });
     if (error) return falha(/invalid login/i.test(error.message) ? "Nome ou senha incorretos." : error.message);
@@ -253,12 +257,12 @@ async function entrar() {
   ui.fase = "carregando"; render();
   try {
     const { data: { session } } = await sb.auth.getSession();
-    if (!session) { ui.fase = "login"; return render(); }
+    if (!session) return mostrarLogin();
     EU.id = session.user.id; EU.nome = (session.user.user_metadata || {}).nome_jogo || String(session.user.email || "").split("@")[0];
     if (!String(session.user.email || "").endsWith("@" + DOMINIO_LOGIN)) { ui.fase = "negado"; ui.erro = "Esta conta não é do NPM. Crie uma conta própria do NPM."; return render(); }
     let { data: sit, error } = await sb.rpc("npm_situacao");
     if (error) throw error;
-    if (sit === "nenhum") { const r = await sb.rpc("npm_registrar", { p_nome: EU.nome }); if (r.error) throw r.error; sit = r.data; }
+    if (sit === "nenhum") { const r = await sb.rpc("npm_registrar", { p_nome: EU.nome }); if (r.error) { ui.fase = "negado"; ui.erro = r.error.message; return render(); } sit = r.data; }
     if (sit === "pendente") { ui.fase = "pendente"; return render(); }
     EU.papel = sit;
     await carregar(); ui.fase = "pronto"; render(); setStatus("✓ Conectado", "#5fbf7a");
@@ -267,7 +271,12 @@ async function entrar() {
 async function boot() {
   if (!sb) { ui.fase = "config"; return render(); }
   const { data: { session } } = await sb.auth.getSession();
-  if (session) entrar(); else { ui.fase = "login"; render(); }
+  if (session) entrar(); else await mostrarLogin();
+}
+async function mostrarLogin() {
+  try { const { data, error } = await sb.rpc("npm_tem_responsavel"); ui.temResp = error ? true : !!data; } catch (e) { ui.temResp = true; }
+  if (!ui.temResp) ui.modo = "criar";
+  ui.fase = "login"; render();
 }
 let saiuEm = 0;
 document.addEventListener("visibilitychange", async () => {

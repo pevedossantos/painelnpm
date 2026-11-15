@@ -12,15 +12,15 @@ Supabase → **SQL Editor** → **New query** → cole todo o `supabase/schema.s
 ## 2. Publicar no GitHub Pages
 Repositório → **Settings → Pages** → *Deploy from a branch* → **main** / **(root)** → **Save**.
 
-## 3. Primeiro acesso
-- Abra o link e toque em **Criar conta** (nome no jogo + senha).
-- **A primeira conta criada vira administradora.** As próximas ficam aguardando aprovação na aba **Equipe**.
-- O administrador pode aprovar, recusar, remover e tornar outra pessoa administradora.
+## 3. Primeiro acesso (conta única)
+- O responsável abre o link e cria a conta (QRA + senha). O QRA aparece no cabeçalho, com MAJ-GEN e Exército de Solano.
+- **O painel tem uma conta só:** depois da primeira, a opção de criar conta some.
+- Na aba **Perfil** dá para trocar a foto do cabeçalho.
 
 ## Como funciona
 - **Efetivos:** cadastro (QRA, DC, data de entrada, recrutado por, observação) e nível com um toque.
 - **Enviados:** quem o TEN-GEN já enviou para um setor (Sul, Norte, Centro, Leste).
-- **Equipe:** contas do NPM.
+- **Perfil:** foto do responsável e sair da conta.
 - O NPM **não** consegue mudar o setor de destino; só o TEN-GEN. Nada aqui altera o rpcontrol.
 
 ## Instalar como app no celular
@@ -28,7 +28,7 @@ Repositório → **Settings → Pages** → *Deploy from a branch* → **main** 
 - **Android (Chrome):** menu ⋮ → **Instalar app**.
 
 ## Arquivos
-- `index.html`, `style.css`, `app.js`: o painel · `logo.svg`: brasão do NPM
+- `index.html`, `style.css`, `app.js`: o painel · `logo.jpg`: logo do NPM
 - `config.js`: URL e chave publishable do Supabase (pública por natureza)
 - `sw.js`: abre rápido e funciona como app (os dados sempre vêm do banco)
 - `supabase/schema.sql`: tabelas e regras de segurança
